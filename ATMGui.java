@@ -1,8 +1,6 @@
-public class ATMGui {
-}
 import javax.swing.*;
-        import java.awt.*;
-        import java.awt.event.ActionEvent;
+import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.URL;
 import java.util.HashMap;
@@ -12,7 +10,7 @@ import java.util.Scanner; // Still needed for Keypad class if not refactoring it
 
 /**
  * Main class for the GUI ATM machine simulation.
- * Sets up the JFrame and contains all nested classes for the ATM logic and UI.
+
  */
 public class AtmGui extends JFrame {
 
@@ -37,8 +35,7 @@ public class AtmGui extends JFrame {
     }
 
     /**
-     * Main method to start the GUI ATM.
-     * Runs the GUI setup on the Event Dispatch Thread (EDT).
+     * Main method to start the GUI ATM
      */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(AtmGui::new);
@@ -47,7 +44,6 @@ public class AtmGui extends JFrame {
 
 /**
  * Represents a bank account.
- * (Copied from previous console version, remains largely the same)
  */
 class BankAccount {
     private int accountNumber;
@@ -91,7 +87,6 @@ class BankAccount {
 
 /**
  * Simulates the bank's database of accounts.
- * (Copied from previous console version, remains largely the same)
  */
 class BankDatabase {
     private Map<Integer, BankAccount> accounts;
@@ -117,14 +112,13 @@ class BankDatabase {
 
 /**
  * Represents the ATM's cash dispenser.
- * (Copied from previous console version, remains largely the same)
  */
 class CashDispenser {
-    private final static int INITIAL_CASH = 500; // Initial number of $20 bills
-    private int count; // Number of $20 bills remaining
+    private final static int INITIAL_CASH = 500;
+    private int count;
 
     public CashDispenser() {
-        count = INITIAL_CASH; // $20 * 500 = $10,000
+        count = INITIAL_CASH;
     }
 
     public void dispenseCash(double amount) {
@@ -140,7 +134,6 @@ class CashDispenser {
 
 /**
  * Represents the ATM's deposit slot.
- * (Copied from previous console version, remains largely the same)
  */
 class DepositSlot {
     public boolean isEnvelopeReceived() {
@@ -150,7 +143,7 @@ class DepositSlot {
 
 /**
  * Utility class for loading images from URLs and caching them.
- * (Copied from Ludo project)
+ *
  */
 class ImageLoader {
     private static final Map<String, Image> IMAGE_CACHE = new HashMap<>();
@@ -189,6 +182,8 @@ class AtmPanel extends JPanel implements ActionListener {
     private static final String BUTTON_BALANCE_URL = "https://placehold.co/100x50/FFD700/000000?text=Balance";
     private static final String BUTTON_EXIT_URL = "https://placehold.co/100x50/FF6347/000000?text=Exit";
     private static final String BUTTON_LOGIN_URL = "https://placehold.co/100x50/32CD32/FFFFFF?text=Login";
+    private static final String BUTTON_BACK_URL = "https://placehold.co/100x50/808080/FFFFFF?text=Back";
+
 
     // --- Loaded Images ---
     private Image atmBackground;
@@ -199,6 +194,7 @@ class AtmPanel extends JPanel implements ActionListener {
     private Image buttonBalanceImage;
     private Image buttonExitImage;
     private Image buttonLoginImage;
+    private Image buttonBackImage;
 
     // --- ATM Components ---
     private BankDatabase bankDatabase;
@@ -207,7 +203,7 @@ class AtmPanel extends JPanel implements ActionListener {
 
     // --- GUI Elements ---
     private JTextArea screenDisplay; // For displaying messages to the user
-    private JTextField inputField;   // For account number, PIN, amounts
+    private JPasswordField inputField;   // Changed from JTextField to JPasswordField
     private JButton loginButton;
     private JButton balanceButton;
     private JButton withdrawButton;
@@ -218,6 +214,8 @@ class AtmPanel extends JPanel implements ActionListener {
     // --- ATM State ---
     private BankAccount currentAccount;
     private String currentScreenState; // "LOGIN", "MAIN_MENU", "BALANCE", "WITHDRAW", "DEPOSIT"
+    private String loginStep; // "ACCOUNT_NUMBER" or "PIN"
+    private int tempAccountNumber; // Temporarily store account number during login
 
     // --- Constants for states ---
     private static final String STATE_LOGIN = "LOGIN";
@@ -225,6 +223,10 @@ class AtmPanel extends JPanel implements ActionListener {
     private static final String STATE_BALANCE = "BALANCE";
     private static final String STATE_WITHDRAW = "WITHDRAW";
     private static final String STATE_DEPOSIT = "DEPOSIT";
+
+    private static final String LOGIN_STEP_ACCOUNT_NUMBER = "ACCOUNT_NUMBER";
+    private static final String LOGIN_STEP_PIN = "PIN";
+
 
     /**
      * Constructor for AtmPanel. Initializes components and loads images.
@@ -245,6 +247,7 @@ class AtmPanel extends JPanel implements ActionListener {
         setupGuiComponents();
 
         // Set initial state
+        resetLoginState(); // Start at account number input
         currentScreenState = STATE_LOGIN;
         updateScreen();
     }
@@ -261,6 +264,7 @@ class AtmPanel extends JPanel implements ActionListener {
         buttonBalanceImage = ImageLoader.loadImage(BUTTON_BALANCE_URL);
         buttonExitImage = ImageLoader.loadImage(BUTTON_EXIT_URL);
         buttonLoginImage = ImageLoader.loadImage(BUTTON_LOGIN_URL);
+        buttonBackImage = ImageLoader.loadImage(BUTTON_BACK_URL);
     }
 
     /**
@@ -278,11 +282,12 @@ class AtmPanel extends JPanel implements ActionListener {
         screenDisplay.setWrapStyleWord(true);
         add(screenDisplay);
 
-        // Input Field
-        inputField = new JTextField();
+        // Input Field - Now JPasswordField
+        inputField = new JPasswordField(); // Changed to JPasswordField
         inputField.setBounds(150, 360, 500, 30); // Below the screen
         inputField.setFont(new Font("Arial", Font.PLAIN, 18));
         inputField.setHorizontalAlignment(JTextField.CENTER);
+        inputField.addActionListener(this); // Allow pressing Enter to submit
         add(inputField);
 
         // Buttons
@@ -332,6 +337,9 @@ class AtmPanel extends JPanel implements ActionListener {
         backButton = new JButton("Back to Main Menu");
         backButton.setBounds(300, 520, 200, 40); // Below other buttons
         backButton.addActionListener(this);
+        backButton.setIcon(new ImageIcon(buttonBackImage));
+        backButton.setHorizontalTextPosition(SwingConstants.CENTER);
+        backButton.setVerticalTextPosition(SwingConstants.CENTER);
         backButton.setVisible(false); // Initially hidden
         add(backButton);
     }
@@ -360,14 +368,18 @@ class AtmPanel extends JPanel implements ActionListener {
     }
 
     /**
-     * Handles button clicks.
-     * @param e The ActionEvent generated by a button click.
+     * Handles button clicks and input field 'Enter' presses.
+     * @param e The ActionEvent generated by a button click or JTextField 'Enter'.
      */
     @Override
     public void actionPerformed(ActionEvent e) {
-        if (e.getSource() == loginButton) {
+        // If the action comes from the input field (Enter key press) AND we are in login state
+        if (e.getSource() == inputField && currentScreenState.equals(STATE_LOGIN)) {
             handleLogin();
-        } else if (e.getSource() == balanceButton) {
+        } else if (e.getSource() == loginButton && currentScreenState.equals(STATE_LOGIN)) {
+            handleLogin(); // Also handle login button click
+        }
+        else if (e.getSource() == balanceButton) {
             showBalance();
         } else if (e.getSource() == withdrawButton) {
             showWithdrawalOptions();
@@ -382,10 +394,30 @@ class AtmPanel extends JPanel implements ActionListener {
         else if (currentScreenState.equals(STATE_WITHDRAW) && e.getSource() instanceof JButton) {
             JButton clickedButton = (JButton) e.getSource();
             try {
-                double amount = Double.parseDouble(clickedButton.getText().replace("$", ""));
-                performWithdrawal(amount);
+                // Check if it's a numeric amount button
+                if (clickedButton.getText().matches("\\$\\d+")) {
+                    double amount = Double.parseDouble(clickedButton.getText().replace("$", ""));
+                    performWithdrawal(amount);
+                } else if (clickedButton.getText().equals("Custom Amount")) {
+                    // Allow user to type custom amount
+                    screenDisplay.setText("Enter custom withdrawal amount (multiples of 20):");
+                    inputField.setVisible(true);
+                    inputField.setText("");
+                    inputField.requestFocusInWindow();
+                    // Custom amount will be processed when user types in inputField and presses Enter
+                }
             } catch (NumberFormatException ex) {
                 // Not a withdrawal amount button, ignore or handle
+                screenDisplay.setText("Invalid amount format.");
+            }
+        }
+        // Handle custom withdrawal amount entered in inputField
+        else if (e.getSource() == inputField && currentScreenState.equals(STATE_WITHDRAW)) {
+            try {
+                double amount = Double.parseDouble(inputField.getText().trim());
+                performWithdrawal(amount);
+            } catch (NumberFormatException ex) {
+                screenDisplay.setText("Invalid amount. Please enter a number.");
             }
         }
         // Handle specific deposit confirmation if on deposit screen
@@ -395,7 +427,22 @@ class AtmPanel extends JPanel implements ActionListener {
                 performDeposit();
             }
         }
+        // Handle deposit amount entered in inputField
+        else if (e.getSource() == inputField && currentScreenState.equals(STATE_DEPOSIT)) {
+            performDeposit(); // Process deposit amount from input field
+        }
         updateScreen(); // Update screen after any action
+    }
+
+    /**
+     * Resets the login state to prompt for account number.
+     */
+    private void resetLoginState() {
+        loginStep = LOGIN_STEP_ACCOUNT_NUMBER;
+        tempAccountNumber = 0;
+        currentAccount = null;
+        inputField.setText("");
+        inputField.setEchoChar((char)0); // Ensure text is visible for account number
     }
 
     /**
@@ -426,10 +473,18 @@ class AtmPanel extends JPanel implements ActionListener {
         // Set visibility and text based on state
         switch (currentScreenState) {
             case STATE_LOGIN:
-                screenDisplay.setText("Welcome!\nPlease enter your account number and PIN.");
-                inputField.setVisible(true);
                 loginButton.setVisible(true);
-                inputField.setToolTipText("Enter Account Number then PIN");
+                inputField.setVisible(true);
+                inputField.requestFocusInWindow(); // Give focus to input field
+                if (loginStep.equals(LOGIN_STEP_ACCOUNT_NUMBER)) {
+                    screenDisplay.setText("Welcome!\nPlease enter your account number:");
+                    inputField.setToolTipText("Enter Account Number");
+                    inputField.setEchoChar((char)0); // Show characters
+                } else { // LOGIN_STEP_PIN
+                    screenDisplay.setText("Account: " + tempAccountNumber + "\nPlease enter your PIN:");
+                    inputField.setToolTipText("Enter PIN");
+                    inputField.setEchoChar('*'); // Hide characters for PIN
+                }
                 break;
             case STATE_MAIN_MENU:
                 screenDisplay.setText("Authentication successful!\n\nATM Main Menu:\n1 - View my balance\n2 - Withdraw cash\n3 - Deposit funds\n4 - Exit");
@@ -444,13 +499,13 @@ class AtmPanel extends JPanel implements ActionListener {
                 backButton.setVisible(true);
                 break;
             case STATE_WITHDRAW:
-                screenDisplay.setText("Withdrawal Menu:\nChoose a withdrawal amount (in $20 increments):");
-                inputField.setVisible(true); // For custom amount, though we'll use buttons for fixed
+                screenDisplay.setText("Withdrawal Menu:\nChoose a withdrawal amount (multiples of 20):");
+                inputField.setVisible(true); // For custom amount
                 setupWithdrawalButtons();
                 backButton.setVisible(true);
                 break;
             case STATE_DEPOSIT:
-                screenDisplay.setText("Please enter the deposit amount (e.g., 100 for $1.00):");
+                screenDisplay.setText("Please enter the deposit amount (e.g., 100.00 for $100.00, or 0 to cancel):");
                 inputField.setVisible(true);
                 setupDepositButtons(); // Setup confirm/cancel buttons
                 backButton.setVisible(true);
@@ -466,36 +521,34 @@ class AtmPanel extends JPanel implements ActionListener {
      */
     private void handleLogin() {
         try {
-            // Assume first input is account number, second is PIN
-            String input = inputField.getText();
+            String input = new String(inputField.getPassword()).trim(); // Get password as String
             if (input.isEmpty()) {
-                screenDisplay.setText("Please enter your account number.");
+                screenDisplay.setText("Input cannot be empty. Please enter a value.");
                 return;
             }
 
-            // Simple state for login: first input is account, second is PIN
-            if (inputField.getToolTipText().equals("Enter Account Number then PIN")) {
-                int accountNumber = Integer.parseInt(input);
+            if (loginStep.equals(LOGIN_STEP_ACCOUNT_NUMBER)) {
+                tempAccountNumber = Integer.parseInt(input);
+                loginStep = LOGIN_STEP_PIN; // Move to PIN step
                 inputField.setText(""); // Clear for PIN
-                inputField.setToolTipText("Enter PIN");
-                screenDisplay.setText("Account Number: " + accountNumber + "\nEnter your PIN:");
-                // Store account number temporarily
-                currentAccount = new BankAccount(accountNumber, 0, 0, 0); // Dummy for now
-            } else if (inputField.getToolTipText().equals("Enter PIN")) {
+                inputField.setEchoChar('*'); // Hide characters for PIN
+                screenDisplay.setText("Account: " + tempAccountNumber + "\nPlease enter your PIN:");
+            } else if (loginStep.equals(LOGIN_STEP_PIN)) {
                 int pin = Integer.parseInt(input);
-                if (bankDatabase.authenticateUser(currentAccount.getAccountNumber(), pin)) {
-                    currentAccount = bankDatabase.getAccount(currentAccount.getAccountNumber()); // Get real account
+                if (bankDatabase.authenticateUser(tempAccountNumber, pin)) {
+                    currentAccount = bankDatabase.getAccount(tempAccountNumber); // Get real account
                     currentScreenState = STATE_MAIN_MENU;
                     screenDisplay.setText("Authentication successful!");
+                    inputField.setText(""); // Clear field
                 } else {
                     screenDisplay.setText("Invalid account number or PIN. Please try again.");
-                    inputField.setToolTipText("Enter Account Number then PIN"); // Reset for next attempt
-                    currentAccount = null;
+                    resetLoginState(); // Reset to account number input
                 }
             }
         } catch (NumberFormatException ex) {
             screenDisplay.setText("Invalid input. Please enter numbers only.");
             inputField.setText("");
+            resetLoginState(); // Reset on invalid input
         }
     }
 
@@ -506,8 +559,9 @@ class AtmPanel extends JPanel implements ActionListener {
         if (currentAccount != null) {
             currentScreenState = STATE_BALANCE;
         } else {
-            screenDisplay.setText("Please log in first.");
+            screenDisplay.setText("Error: Not logged in. Please log in.");
             currentScreenState = STATE_LOGIN;
+            resetLoginState();
         }
     }
 
@@ -516,25 +570,29 @@ class AtmPanel extends JPanel implements ActionListener {
      */
     private void setupWithdrawalButtons() {
         int[] amounts = {20, 40, 60, 100, 200};
-        int xOffset = 150;
+        int xOffset = 50;
         int yOffset = 400;
+        int buttonWidth = 100;
+        int buttonHeight = 50;
+        int spacing = 10;
+
         for (int i = 0; i < amounts.length; i++) {
             JButton amountButton = new JButton("$" + amounts[i]);
-            amountButton.setBounds(xOffset + (i * 120), yOffset, 100, 50);
+            amountButton.setBounds(xOffset + (i * (buttonWidth + spacing)), yOffset, buttonWidth, buttonHeight);
             amountButton.addActionListener(this);
             amountButton.setIcon(new ImageIcon(buttonGenericImage));
             amountButton.setHorizontalTextPosition(SwingConstants.CENTER);
             amountButton.setVerticalTextPosition(SwingConstants.CENTER);
             add(amountButton);
         }
-        // Add a cancel button for withdrawal
-        JButton cancelButton = new JButton("Cancel");
-        cancelButton.setBounds(xOffset + (amounts.length * 120), yOffset, 100, 50);
-        cancelButton.addActionListener(e -> showMainMenu()); // Go back to main menu on cancel
-        cancelButton.setIcon(new ImageIcon(buttonExitImage));
-        cancelButton.setHorizontalTextPosition(SwingConstants.CENTER);
-        cancelButton.setVerticalTextPosition(SwingConstants.CENTER);
-        add(cancelButton);
+        // Custom amount button
+        JButton customAmountButton = new JButton("Custom Amount");
+        customAmountButton.setBounds(xOffset + (amounts.length * (buttonWidth + spacing)), yOffset, 150, buttonHeight);
+        customAmountButton.addActionListener(this);
+        customAmountButton.setIcon(new ImageIcon(buttonGenericImage));
+        customAmountButton.setHorizontalTextPosition(SwingConstants.CENTER);
+        customAmountButton.setVerticalTextPosition(SwingConstants.CENTER);
+        add(customAmountButton);
     }
 
     /**
@@ -550,8 +608,14 @@ class AtmPanel extends JPanel implements ActionListener {
      */
     private void performWithdrawal(double amount) {
         if (currentAccount == null) {
-            screenDisplay.setText("Please log in first.");
+            screenDisplay.setText("Error: Not logged in. Please log in.");
             currentScreenState = STATE_LOGIN;
+            resetLoginState();
+            return;
+        }
+
+        if (amount % 20 != 0 || amount <= 0) {
+            screenDisplay.setText("Withdrawal amounts must be positive multiples of $20.");
             return;
         }
 
@@ -589,11 +653,8 @@ class AtmPanel extends JPanel implements ActionListener {
         cancelButton.addActionListener(e -> showMainMenu());
         cancelButton.setIcon(new ImageIcon(buttonExitImage));
         cancelButton.setHorizontalTextPosition(SwingConstants.CENTER);
-        cancelTextPosition(SwingConstants.CENTER);
+        cancelButton.setVerticalTextPosition(SwingConstants.CENTER);
         add(cancelButton);
-    }
-
-    private void cancelTextPosition(int center) {
     }
 
     /**
@@ -608,8 +669,9 @@ class AtmPanel extends JPanel implements ActionListener {
      */
     private void performDeposit() {
         if (currentAccount == null) {
-            screenDisplay.setText("Please log in first.");
+            screenDisplay.setText("Error: Not logged in. Please log in.");
             currentScreenState = STATE_LOGIN;
+            resetLoginState();
             return;
         }
 
@@ -619,10 +681,12 @@ class AtmPanel extends JPanel implements ActionListener {
                 screenDisplay.setText("Deposit amount must be positive.");
                 return;
             }
+            // For simplicity, we assume cash is always inserted correctly
             if (depositSlot.isEnvelopeReceived()) {
                 currentAccount.credit(amount);
                 screenDisplay.setText("Your deposit of $" + String.format("%,.2f", amount) + " has been credited to your account.");
             } else {
+                // This branch is currently unreachable due to isEnvelopeReceived always returning true
                 screenDisplay.setText("You did not insert an envelope, so your transaction has been canceled.");
             }
         } catch (NumberFormatException ex) {
@@ -640,6 +704,7 @@ class AtmPanel extends JPanel implements ActionListener {
     private void handleExit() {
         currentAccount = null; // Log out
         currentScreenState = STATE_LOGIN;
+        resetLoginState(); // Reset login state for next user
         screenDisplay.setText("Thank you for using the ATM. Goodbye!");
         // Optionally, dispose the frame: SwingUtilities.getWindowAncestor(this).dispose();
     }
